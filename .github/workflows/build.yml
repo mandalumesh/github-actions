@@ -34,10 +34,10 @@ jobs:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.3ce64ba9-c921-40c1-b6e4-457f13e5f214 }}
-          tenant-id: ${{ secrets.3c15bb8c-115d-4892-afbd-c5b9df4802d1 }}
-          subscription-id: ${{ secrets.386bf8df-3557-497d-bc9b-e22e349d7257 }}
-          client-secret: ${{ secrets.qFc8Q~.N2QmDdNfhiPBdLy1dS-bYZjgkILxRual4 }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
 
       - name: Terraform Plan
         run: terraform plan -out=tfplan
