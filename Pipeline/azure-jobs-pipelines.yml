@@ -1,0 +1,77 @@
+trigger: none
+pool: HCL-POOL
+name: Azure-jobs-pipeline
+jobs:
+  - job: Job1
+    displayName: terraforminstal
+    steps:
+     - task: TerraformInstaller@1
+       inputs:
+         terraformVersion: 'latest'
+
+  - job: Job2
+    displayName: Codequaltychek
+    dependsOn: job1
+    steps:
+     - task: tfsec@1
+       inputs:
+         version: 'v1.26.0'
+         dir: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+     
+
+  - job: Job3
+    displayName: terraforminitplan
+    dependsOn: Job2
+    steps:
+     - task: TerraformTask@5
+       displayName: terraforminit
+       inputs:
+         provider: 'azurerm'
+         command: 'init'
+         workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+         backendServiceArm: 'hclsp'
+         backendAzureRmStorageAccountName: 'hclstorageacc03'
+         backendAzureRmContainerName: 'hclcontainer'
+         backendAzureRmKey: 'terraform.tfstate'
+
+     - task: TerraformTask@5
+       displayName: terraformplan
+       inputs:
+         provider: 'azurerm'
+         command: 'plan'
+         workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+         environmentServiceNameAzureRM: 'hclsp'
+
+  - job: Job4
+    displayName: Manualapprivel
+    dependsOn: Job3
+    pool: server
+    steps:
+     - task: ManualValidation@1
+       inputs:
+         notifyUsers: 'xyg@xyj.com'
+         approvers: 'um3514653@outlook.com'
+         instructions: 'please review and approve'
+
+  - job: Job5
+    displayName: terraformapply
+    dependsOn: job4
+    steps:
+     - task: TerraformTask@5
+       displayName: terrafrominit
+       inputs:
+         provider: 'azurerm'
+         command: 'init'
+         workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+         backendServiceArm: 'hclsp'
+         backendAzureRmStorageAccountName: 'hclstorageacc03'
+         backendAzureRmContainerName: 'hclcontainer'
+         backendAzureRmKey: 'terrafrom.tfstate'
+
+     - task: TerraformTask@5
+       displayName: terraformapply
+       inputs:
+         provider: 'azurerm'
+         command: 'apply'
+         workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+         environmentServiceNameAzureRM: 'hclsp'

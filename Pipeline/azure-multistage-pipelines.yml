@@ -1,0 +1,103 @@
+trigger: none
+pool: HCL-POOL
+name: Multistage-pipeline
+stages:
+  - stage: Build
+    jobs: 
+      - job: job1
+        displayName: terraforminstal
+        steps:
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: 'latest'
+
+      - job: job2
+        displayName: codescaning
+        dependsOn: job1
+        steps:
+          - task: tfsec@1
+            inputs:
+              version: 'v1.26.0'
+              dir: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+
+      - job: Job3
+        displayName: terraforminitplan
+        dependsOn: job2
+        steps:
+          - task: TerraformTask@5
+            displayName: terraforminit
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+              backendServiceArm: 'hclsp'
+              backendAzureRmResourceGroupName: 'NetworkWatcherRG'
+              backendAzureRmStorageAccountName: 'hclstorageacc03'
+              backendAzureRmContainerName: 'hclcontainer'
+              backendAzureRmKey: 'terraform.tfstate'
+
+          - task: TerraformTask@5
+            displayName: terraformvalidate
+            inputs:
+              provider: 'azurerm'
+              command: 'validate'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+
+          - task: TerraformTask@5
+            displayName: terraformplan
+            inputs:
+              provider: 'azurerm'
+              command: 'plan'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+              environmentServiceNameAzureRM: 'hclsp'
+              commandOptions: '-out=tfplan'
+          - task:  PublishPipelineArtifact@1
+            displayName: 'Publish tfplan'
+            inputs:
+              targetPath: '$(System.DefaultWorkingDirectory)/Enviroments/dev/tfplan'
+              artifact: 'tfplan'
+
+
+
+  - stage: Deploytodev
+    dependsOn: Build
+    jobs:
+      - job: job1
+        displayName: manualapproval
+        pool: server
+        steps:
+          - task: ManualValidation@1
+            inputs:
+              notifyUsers: 'xyz@xyz.com'
+              approvers: 'um3514653@outlook.com'
+              instructions: 'pls review and approve'
+
+      - job: job2
+        displayName: terraformapply
+        dependsOn: job1
+        steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download tfplan'
+            inputs:
+              artifact: 'tfplan'
+              path: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+
+          - task: TerraformTask@5
+            displayName: terraforminit
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+              backendServiceArm: 'hclsp'
+              backendAzureRmResourceGroupName: 'NetworkWatcherRG'
+              backendAzureRmStorageAccountName: 'hclstorageacc03'
+              backendAzureRmContainerName: 'hclcontainer'
+              backendAzureRmKey: 'terraform.tfstate'
+          - task: TerraformTask@5
+            displayName: terraformapply
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+              environmentServiceNameAzureRM: 'hclsp'
+              commandOptions: 'tfplan'

@@ -1,0 +1,32 @@
+trigger: none
+
+pool: HCL-POOL
+name: steps-yaml-pipeline
+steps:
+ - task: TerraformInstaller@1
+   inputs:
+    terraformVersion: 'latest'
+
+ - task: TerraformTask@5
+   inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+    backendServiceArm: 'hclsp'
+    backendAzureRmStorageAccountName: 'hclsorageaccount'
+    backendAzureRmContainerName: 'hclcontainer'
+    backendAzureRmKey: 'terraform.tstate'
+
+
+ - task: TerraformTask@5
+   inputs:
+    provider: 'azurerm'
+    command: 'validate'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+
+ - task: TerraformTask@5
+   inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+    environmentServiceNameAzureRM: 'hclsp'

@@ -1,0 +1,152 @@
+trigger: none
+pool: HCL-POOL
+name: Multistage-pipeline
+
+variables:
+   resourcegroupname: NetworkWatcherRG
+   storageaccountname: hclstorageacc03
+   contaninername: hclcontainer
+   statefilename: terraform.tfstate
+   backendservicenme: hclsp
+
+stages:
+  - stage: terraformvalidation
+    jobs: 
+      - job: job1
+        displayName: terraforminstal
+        steps:
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: 'latest'
+
+      - job: Job2
+        displayName: terraforminitvalidation
+        dependsOn: job1
+        steps:
+          - task: TerraformTask@5
+            displayName: terraforminit
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+              backendServiceArm: $(backendservicenme)
+              backendAzureRmResourceGroupName: $(NetworkWatcherRG)
+              backendAzureRmStorageAccountName: $(storageaccountname)
+              backendAzureRmContainerName: $(hclcontainer)
+              backendAzureRmKey: $(terraform.tfstate)
+
+          - task: TerraformTask@5
+            displayName: terraformvalidate
+            inputs:
+              provider: 'azurerm'
+              command: 'validate'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+
+      - job: job3
+        displayName: tfseccodscaning
+        dependsOn: job2
+        steps:
+          - task: tfsec@1
+            inputs:
+              version: 'v1.26.0'
+              dir: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+
+  - stage: SonarQubeAnalysis
+    displayName: StaticCodeAnalysis
+    dependsOn: terraformvalidation
+    jobs:
+      - job: job1
+        displayName: staticcodeanalysis
+        steps:
+          - task: SonarQubePrepare@7
+            inputs:
+              SonarQube: 'SonarQube-Connection'
+              scannerMode: 'cli'
+              configMode: 'manual'
+              cliProjectKey: 'terraform-demo'
+              cliProjectName: 'terraform-demo'
+              cliSources: 'Enviroments/dev'
+
+          - task: SonarQubeAnalyze@7
+            displayName: RunSonarQubeAnalysis
+
+          - task: SonarQubePublish@7
+            displayName: PublishQualityGate
+            inputs:
+              pollingTimeoutSec: '300'
+
+  - stage: terraformplan
+    displayName: plan
+    dependsOn: SonarQubeAnalysis
+    jobs:
+      - job: job1
+        displayName: terraforminit
+        steps:
+          - task: TerraformTask@5
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+              backendServiceArm: 'hclsp'
+              backendAzureRmResourceGroupName: 'NetworkWatcherRG'
+              backendAzureRmStorageAccountName: 'storageaccountname'
+              backendAzureRmContainerName: 'hclcontainer'
+              backendAzureRmKey: 'terraform.tfstate'
+  
+          - task: TerraformTask@5
+            inputs:
+              provider: 'azurerm'
+              command: 'plan'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+              environmentServiceNameAzureRM: 'hclsp'
+              commandOptions: '-out=tfplan'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '$(System.DefaultWorkingDirectory)/Enviroments/dev/'
+              artifact: 'tfplan'
+              publishLocation: 'pipeline'
+
+
+  - stage: Deploytodev
+    dependsOn: terraformplan
+    jobs:
+      - job: job1
+        displayName: manualapproval
+        pool: server
+        steps:
+          - task: ManualValidation@1
+            inputs:
+              notifyUsers: 'xyz@xyz.com'
+              approvers: 'um3514653@outlook.com'
+              instructions: 'pls review and approve'
+
+      - job: job2
+        displayName: terraformapply
+        dependsOn: job1
+        steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download tfplan'
+            inputs:
+              artifact: 'tfplan'
+              path: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+
+          - task: TerraformTask@5
+            displayName: terraforminit
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+              backendServiceArm: $(backendservicenme)
+              backendAzureRmResourceGroupName: $(NetworkWatcherRG)
+              backendAzureRmStorageAccountName: $(storageaccountname)
+              backendAzureRmContainerName: $(hclcontainer)
+              backendAzureRmKey: $(terraform.tfstate)
+          - task: TerraformTask@5
+            displayName: terraformapply
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Enviroments/dev'
+              environmentServiceNameAzureRM: $(backendservicenme)
+              commandOptions: 'tfplan'
