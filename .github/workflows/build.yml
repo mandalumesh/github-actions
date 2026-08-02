@@ -1,4 +1,4 @@
-name: My First Workflow
+name: Terraform CI Pipeline
 
 on:
   push:
@@ -6,9 +6,38 @@ on:
       - main
 
 jobs:
-  hello:
+  terraform:
+
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: Enviroments/dev
+
     steps:
-      - name: Print Message
-        run: echo "Hello GitHub Actions!"
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Version
+        run: terraform version
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
